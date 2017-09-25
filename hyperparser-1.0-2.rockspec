@@ -1,8 +1,8 @@
 package = "hyperparser"
-version = "1.0-1"
+version = "1.0-2"
 
 source = {
-  url = "https://github.com/armatys/hyperparser"
+  url = "https://github.com/lalawue/hyperparser"
 }
 
 description = {
@@ -10,12 +10,12 @@ description = {
   detailed = [[
     Lua bindings to http parser library.
   ]],
-  homepage = "https://github.com/armatys/hyperparser",
+  homepage = "https://github.com/lalawue/hyperparser",
   license = "MIT/X11"
 }
 
 dependencies = {
-  "lua >= 5.1"
+  "lua >= 5.2"
 }
 
 supported_platforms = { "macosx", "freebsd", "linux" }
@@ -25,10 +25,10 @@ build = {
   modules = {
     hyperparser = {
       sources = {
-        "submodules/http-parser/http_parser.c",
+        "vendor/http-parser/http_parser.c",
         "src/main.c",
       },
-      incdirs = { "submodules/http-parser" }
+      incdirs = { "vendor/http-parser" }
     }
   }
 }

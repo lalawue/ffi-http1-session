@@ -1,4 +1,4 @@
-Hyperparser - Lua HTTP parser (based on [http-parser](https://github.com/joyent/http-parser))
+Hyperparser - Lua HTTP parser (based on [http-parser](https://github.com/nodejs/http-parser))
 
 It runs on *BSD and Linux. Windows was not tested.
 
@@ -33,3 +33,7 @@ The library follows behavior from http-parser C library.
 	
 	parser:execute(settings, req)
 
+
+### Origin
+
+from https://github.com/armatys/hyperparser

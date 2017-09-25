@@ -61,10 +61,6 @@ static const char* getHttpMethodEnum(int method) {
   }
 }
 
-/* static void pushCallbacks(lua_State* L) { */
-/*   lua_getfield(L, LUA_ENVIRONINDEX, HyperParserCallbacksName); */
-/* } */
-
 static int l_parsertostring(lua_State* L) {
   http_parser* p = (http_parser*)luaL_checkudata(L, 1, ParserUDataName);
   if (p->type == 0)
@@ -103,8 +99,8 @@ static int l_msgbegin(http_parser* p) {
   return l_http_cb(p, "msgbegin");
 }
 
-static int l_status(http_parser* p) {
-  return l_http_cb(p, "status");
+static int l_status(http_parser* p, const char *at, size_t length) {
+   return l_http_data_cb(p, at, length, "status");
 }
 
 static int l_headerscomplete(http_parser* p) {
@@ -350,11 +346,11 @@ LUALIB_API int luaopen_hyperparser(lua_State* L) {
   
   lua_pushvalue(L, -1);
   lua_setfield(L, -2, "__index");
-  luaL_register(L, NULL, hyperlib_m);
+  luaL_setfuncs(L, hyperlib_m, 0);
 
   /* Main functions */
   lua_newtable(L);
-  luaL_register(L, NULL, hyperlib);
+  luaL_setfuncs(L, hyperlib, 0);
   
   return 1;
 }
