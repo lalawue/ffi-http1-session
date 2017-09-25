@@ -61,9 +61,9 @@ static const char* getHttpMethodEnum(int method) {
   }
 }
 
-static void pushCallbacks(lua_State* L) {
-  lua_getfield(L, LUA_ENVIRONINDEX, HyperParserCallbacksName);
-}
+/* static void pushCallbacks(lua_State* L) { */
+/*   lua_getfield(L, LUA_ENVIRONINDEX, HyperParserCallbacksName); */
+/* } */
 
 static int l_parsertostring(lua_State* L) {
   http_parser* p = (http_parser*)luaL_checkudata(L, 1, ParserUDataName);
@@ -103,8 +103,8 @@ static int l_msgbegin(http_parser* p) {
   return l_http_cb(p, "msgbegin");
 }
 
-static int l_statuscomplete(http_parser* p) {
-  return l_http_cb(p, "statuscomplete");
+static int l_status(http_parser* p) {
+  return l_http_cb(p, "status");
 }
 
 static int l_headerscomplete(http_parser* p) {
@@ -158,7 +158,7 @@ static int l_execute(lua_State* L) {
   // Parse settings callbacks
   struct http_parser_settings settings;
   settings.on_message_begin = NULL;
-  settings.on_status_complete = NULL;
+  settings.on_status = NULL;
   settings.on_url = NULL;
   settings.on_header_field = NULL;
   settings.on_header_value = NULL;
@@ -185,8 +185,8 @@ static int l_execute(lua_State* L) {
       settings.on_body = l_body;
     else if (strncmp(key, "msgcomplete", 12) == 0)
       settings.on_message_complete = l_msgcomplete;
-    else if (strncmp(key, "statuscomplete", 15) == 0)
-      settings.on_status_complete = l_statuscomplete;
+    else if (strncmp(key, "status", 15) == 0)
+      settings.on_status = l_status;
     else
       return luaL_error(L, "Callback '%s' is not available (misspelled name?)", key);
   }
