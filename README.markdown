@@ -31,8 +31,10 @@ The library follows behavior from http-parser C library.
 		end
 	}
 	
-	parser:execute(settings, req)
-
+	local nread, err = parser:execute(settings, req)
+        if err then
+            -- handle error
+        end
 
 ### Origin
 

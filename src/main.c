@@ -191,8 +191,14 @@ static int l_execute(lua_State* L) {
   p->data = L;
   size_t nparsed = http_parser_execute(p, &settings, data, len);
   lua_pushnumber(L, nparsed);
-  
-  return 1;
+  if (p->http_errno != 0) {
+     const char *err = http_errno_description(p->http_errno);
+     lua_pushstring(L, err);
+  } else {
+     lua_pushnil(L);
+  }
+
+  return 2;
 }
 
 /*========== Hyperparser Attributes ================*/
