@@ -123,6 +123,14 @@ static int l_headervalue(http_parser* p, const char *at, size_t length) {
   return l_http_data_cb(p, at, length, "headervalue");
 }
 
+static int l_chunkheader(http_parser* p) {
+  return l_http_cb(p, "chunkheader");
+}
+
+static int l_chunkcomplete(http_parser* p) {
+  return l_http_cb(p, "chunkcomplete");
+}
+
 static int l_body(http_parser* p, const char *at, size_t length) {
   return l_http_data_cb(p, at, length, "body");
 }
@@ -153,14 +161,7 @@ static int l_execute(lua_State* L) {
   // ===========
   // Parse settings callbacks
   struct http_parser_settings settings;
-  settings.on_message_begin = NULL;
-  settings.on_status = NULL;
-  settings.on_url = NULL;
-  settings.on_header_field = NULL;
-  settings.on_header_value = NULL;
-  settings.on_headers_complete = NULL;
-  settings.on_body = NULL;
-  settings.on_message_complete = NULL;
+  memset(&settings, 0, sizeof(settings));
 
   lua_pushnil(L); // the first key
   while(lua_next(L, 3) != 0) {
@@ -183,6 +184,10 @@ static int l_execute(lua_State* L) {
       settings.on_message_complete = l_msgcomplete;
     else if (strncmp(key, "status", 15) == 0)
       settings.on_status = l_status;
+    else if (strncmp(key, "chunkheader", 11) == 0)
+      settings.on_chunk_header = l_chunkheader;
+    else if (strncmp(key, "chunkcomplete", 13) == 0)
+      settings.on_chunk_complete = l_chunkcomplete;
     else
       return luaL_error(L, "Callback '%s' is not available (misspelled name?)", key);
   }
@@ -190,7 +195,7 @@ static int l_execute(lua_State* L) {
 
   p->data = L;
   size_t nparsed = http_parser_execute(p, &settings, data, len);
-  lua_pushnumber(L, nparsed);
+  lua_pushinteger(L, nparsed);
   if (p->http_errno != 0) {
      const char *err = http_errno_description(p->http_errno);
      lua_pushstring(L, err);
