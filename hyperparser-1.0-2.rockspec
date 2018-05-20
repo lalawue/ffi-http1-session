@@ -25,10 +25,10 @@ build = {
   modules = {
     hyperparser = {
       sources = {
-        "vendor/http-parser/http_parser.c",
+        "src/http_parser.c",
         "src/main.c",
       },
-      incdirs = { "vendor/http-parser" }
+      incdirs = { "src" }
     }
   }
 }
