@@ -1,5 +1,5 @@
 package = "hyperparser"
-version = "1.0-2"
+version = "1.0-3"
 
 source = {
   url = "https://github.com/lalawue/hyperparser"
