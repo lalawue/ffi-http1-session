@@ -24,19 +24,21 @@ typedef struct s_head_kv {
 } head_kv_t;
 
 typedef struct s_data {
-   unsigned char *data;
-   int data_len;
+   unsigned char data[HTTP_URL_LENGTH];
+   int data_pos;
    struct s_data *next;
 } data_t;
 
 typedef struct s_http {
-   process_state_t state;
+   process_state_t process_state; /*  */
    char url[HTTP_URL_LENGTH];
-   int status_code;
+   uint16_t status_code;
    head_kv_t *head_kv;
-   data_t *body;
-   int data_length;
-   void *opaque;
+   data_t *content;
+   unsigned int content_length;
+   unsigned int readed_length;
+   const char *err_msg;
+   void *opaque;                /* reserved */
 } http_t;
 
 /* 0:request 1:response 2:both */
