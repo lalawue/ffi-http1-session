@@ -2,6 +2,8 @@ Hyperparser - Lua HTTP parser (based on [http-parser](https://github.com/nodejs/
 
 It runs on *BSD and Linux. Windows was not tested.
 
+also support LuaJIT's pull-style api, just type make.
+
 ### Compilation
 
 Use luarocks to compile and install:
