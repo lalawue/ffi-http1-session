@@ -46,6 +46,7 @@ static int
 _headerscomplete(http_parser* p) {
    http_t *h = _http(p);
    h->process_state = PROCESS_STATE_BODY;
+   h->method = http_method_str(p->method);
    h->status_code = p->status_code;   
    h->content_length = p->content_length;
    return 0;
@@ -198,15 +199,28 @@ mhttp_parser_destroy(http_t *h) {
 }
 
 #ifdef TEST
+static char*
+get_content(char *path, size_t *size) {
+   FILE *fp = fopen(path, "rb");
+   fseek(fp, 0, SEEK_END);
+   *size = ftell(fp);
+   char *data = calloc(1, *size + 1);
+   fseek(fp, 0, SEEK_SET);
+   fread(data, *size+1, 1, fp);
+   fclose(fp);
+   return data;
+}
 int main(int argc, char *argv[]) {
    if (argc < 3) {
       return 0;
    }
    int style = atoi(argv[1]);
-   char *data = argv[2];
-   printf("--%d --\n", (int)strlen(data));
+   size_t size = 0;
+   char *data = get_content(argv[2], &size);
+   printf("--%ld --\n", size);
    http_t *h = mhttp_parser_create(style);
-   if (mhttp_parser_process(h, data, strlen(data)-1) > 0) {
+   if (mhttp_parser_process(h, data, size) > 0) {
+      printf("method: %s\n", h->method);      
       printf("state: %d, %d\n", h->process_state, h->readed_length);
       printf("url: %s\n", h->url);
       printf("status: %d\n", h->status_code);

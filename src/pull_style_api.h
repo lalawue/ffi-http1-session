@@ -31,6 +31,7 @@ typedef struct s_data {
 
 typedef struct s_http {
    process_state_t process_state; /*  */
+   const char *method;
    char url[HTTP_URL_LENGTH];
    uint16_t status_code;
    head_kv_t *head_kv;
