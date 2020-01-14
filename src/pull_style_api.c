@@ -89,6 +89,8 @@ _headervalue(http_parser* p, const char *at, size_t length) {
 
 static int
 _chunkheader(http_parser* p) {
+   http_t *h = _http(p);
+   h->content_length = 0;
    return 0;
 }
 
@@ -159,6 +161,8 @@ mhttp_parser_create(int parser_type) {
    /* parser */
    http_parser_init(&ctx->parser, (enum http_parser_type)parser_type);
    ctx->parser.data = h;
+   ctx->parser.method = 0xFF;
+   ctx->parser.status_code = 0xFFFF;
    /* settings */
    http_parser_settings_init(&ctx->settings);
    ctx->settings.on_message_begin = _msgbegin;
@@ -221,7 +225,10 @@ int main(int argc, char *argv[]) {
    http_t *h = mhttp_parser_create(style);
    if (mhttp_parser_process(h, data, size) > 0) {
       printf("method: %s\n", h->method);      
-      printf("state: %d, %d\n", h->process_state, h->readed_length);
+      printf("process-state:%d, content-length:%d, readed:%d\n",
+             h->process_state,
+             h->content_length,
+             h->readed_length);
       printf("url: %s\n", h->url);
       printf("status: %d\n", h->status_code);
       printf("---- header fields ---\n");

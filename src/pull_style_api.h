@@ -36,7 +36,7 @@ typedef struct s_http {
    uint16_t status_code;
    head_kv_t *head_kv;
    data_t *content;
-   unsigned int content_length;
+   unsigned int content_length; /* > readed_length means chunked data */
    unsigned int readed_length;
    const char *err_msg;
    void *opaque;                /* reserved */
