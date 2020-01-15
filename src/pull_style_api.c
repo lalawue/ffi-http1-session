@@ -16,6 +16,7 @@ typedef struct {
    struct http_parser_settings settings;   
    unsigned char buf[HTTP_URL_LENGTH];
    int buf_idx;
+   data_t *last_data;
 } ctx_t;
 
 static inline http_t*
@@ -101,16 +102,18 @@ _chunkcomplete(http_parser* p) {
 
 static inline data_t*
 _next_data(http_t *h) {
+   ctx_t *ctx= _ctx(h);      
    data_t *data = h->content;
    if (!data) {
       data = (data_t *)malloc(sizeof(data_t));
       memset(data, 0, sizeof(data_t));
       h->content = data;
+      ctx->last_data = data;
    } else if (data->data_pos >= HTTP_URL_LENGTH) {
       data = (data_t *)malloc(sizeof(data_t));
       memset(data, 0, sizeof(data_t));
-      data->next = h->content;
-      h->content = data;
+      ctx->last_data->next = data;
+      ctx->last_data = data;
    }
    return data;
 }
