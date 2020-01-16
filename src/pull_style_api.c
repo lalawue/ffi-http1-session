@@ -205,7 +205,23 @@ mhttp_parser_destroy(http_t *h) {
    }
 }
 
-#ifdef TEST
+void
+mhttp_parser_consume_data(http_t *h, int count) {
+   if (h && count > 0) {
+      ctx_t *ctx = _ctx(h);
+      data_t *next = NULL;
+      data_t *head = h->content;
+      for (int i=0; head && i<count; i++) {
+         next = head->next;
+         free(head);
+         head = next;
+      }
+      h->content = head;
+      ctx->last_data = head ? ctx->last_data : NULL;
+   }
+}
+
+#ifdef TEST_PULL_STYLE_API
 static char*
 get_content(char *path, size_t *size) {
    FILE *fp = fopen(path, "rb");
@@ -248,4 +264,4 @@ int main(int argc, char *argv[]) {
    mhttp_parser_destroy(h);
    return 0;
 }
-#endif
+#endif  /* TEST_PULL_STYLE_API */
