@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "http_parser.h"
 #include "pull_style_api.h"
 
@@ -48,8 +49,12 @@ _headerscomplete(http_parser* p) {
    http_t *h = _http(p);
    h->process_state = PROCESS_STATE_BODY;
    h->method = http_method_str(p->method);
-   h->status_code = p->status_code;   
-   h->content_length = p->content_length;
+   h->status_code = p->status_code;
+   if (p->content_length < ULLONG_MAX) {
+      h->content_length = (unsigned int)p->content_length;
+   } else {
+      h->content_length = 0;
+   }
    return 0;
 }
 
@@ -166,6 +171,7 @@ mhttp_parser_create(int parser_type) {
    ctx->parser.data = h;
    ctx->parser.method = 0xFF;
    ctx->parser.status_code = 0xFFFF;
+   ctx->parser.content_length = 0;
    /* settings */
    http_parser_settings_init(&ctx->settings);
    ctx->settings.on_message_begin = _msgbegin;

@@ -1,5 +1,5 @@
 package = "hyperparser"
-version = "1.3-1"
+version = "1.4-1"
 source = {
    url = "git+https://github.com/lalawue/hyperparser.git"
 }
@@ -10,7 +10,7 @@ description = {
    license = "MIT/X11"
 }
 dependencies = {
-   "lua >= 5.2"
+    "lua >= 5.1"
 }
 supported_platforms = {
    "macosx", "freebsd", "linux"
@@ -19,9 +19,12 @@ build = {
    type = "builtin",
    modules = {
       hyperparser = {
+         ffi_hyperparser = {
+            "ffi_hyperparser.lua"
+         },
          sources = {
-            "src/main.c",
-            "src/http_parser.c"
+            "src/http_parser.c",
+            "src/pull_style_api.c"
          }
       }
    }
