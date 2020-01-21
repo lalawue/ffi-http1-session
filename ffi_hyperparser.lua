@@ -56,7 +56,10 @@ local hp_process = hp.mhttp_parser_process
 
 local k_url_len = 8192
 
-local Parser = {}
+local Parser = {
+   STATE_HEAD_FINISH = 2,       -- head infomation ready
+   STATE_BODY_FINISH = 3,       -- body infomation ready
+}
 Parser.__index = Parser
 
 local _intvalue = ffi.new("int", 0)
@@ -72,6 +75,8 @@ function Parser.createParser(parserType)
       _intvalue = 2             -- both
    end
    parser.m_hp = hp_create(_intvalue)
+   parser.m_state = -1
+   parser.m_tbl = nil
    return parser
 end
 
@@ -79,6 +84,8 @@ function Parser:destroy()
    if self.m_hp then
       hp_destroy(self.m_hp)
       self.m_hp = nil
+      self.m_state = -1
+      self.m_tbl = nil
    end
 end
 
@@ -123,22 +130,26 @@ local function _unpack_http(m_hp)
    return tbl
 end
 
--- return nread, http_info_table
+-- return nread, state, http_info_table
 function Parser:process(data)
    local nread = 0
-   local tbl = nil
+   local state = nil
    repeat
       _intvalue = data:len() < k_url_len  and data:len() or k_url_len
       ffi.copy(_buf, data, _intvalue)
       nread = tonumber(hp_process(self.m_hp, _buf, _intvalue))
       data = data:sub(nread)
-      if self.m_hp.process_state == hp.PROCESS_STATE_BODY then
-         tbl = _unpack_http(self.m_hp)
-      elseif self.m_hp.process_state == hp.PROCESS_STATE_FINISH then
-         tbl = _unpack_http(self.m_hp)         
+      state = self.m_hp.process_state
+      if self.m_state ~= tonumber(state) then
+         if state == hp.PROCESS_STATE_BODY then
+            self.m_tbl = _unpack_http(self.m_hp) 
+         elseif state == hp.PROCESS_STATE_FINISH then
+            self.m_tbl = _unpack_http(self.m_hp)
+         end
+         self.m_state = tonumber(state)
       end
    until nread <= 0 or data:len() > 0
-   return nread, tbl
+   return nread, self.m_state, self.m_tbl
 end
 
 return Parser
