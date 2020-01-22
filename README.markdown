@@ -2,7 +2,7 @@ Hyperparser - LuaJIT HTTP parser (based on [http-parser](https://github.com/node
 
 It runs on *BSD and Linux. Windows was not tested.
 
-support LuaJIT's pull-style api, require luarocks.
+support LuaJIT's pull-style api, require luarocks to make.
 
 ### Compilation
 
