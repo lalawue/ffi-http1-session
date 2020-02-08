@@ -217,7 +217,8 @@ mhttp_parser_consume_data(http_t *h, int count) {
       ctx_t *ctx = _ctx(h);
       data_t *next = NULL;
       data_t *head = h->content;
-      for (int i=0; head && i<count; i++) {
+      int i = 0;
+      for ( i=0; head && i<count; i++) {
          next = head->next;
          free(head);
          head = next;
@@ -257,11 +258,13 @@ int main(int argc, char *argv[]) {
       printf("url: %s\n", h->url);
       printf("status: %d\n", h->status_code);
       printf("---- header fields ---\n");
-      for (head_kv_t *kv=h->head_kv; kv; kv=kv->next) {
+      head_tv_t *kv = NULL;
+      for ( kv=h->head_kv; kv; kv=kv->next) {
          printf("%s : %s\n", kv->head_field, kv->head_value);
       }
       printf("---- data:%d ---\n", h->content_length);
-      for (data_t *data=h->content; data; data=data->next) {
+      data_t *data = NULL;
+      for ( data=h->content; data; data=data->next) {
          printf("%s", data->data);
       }
    } else {
