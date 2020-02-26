@@ -1,6 +1,6 @@
--- 
+--
 -- Copyright (c) 2019 lalawue
--- 
+--
 -- This library is free software; you can redistribute it and/or modify it
 -- under the terms of the MIT license. See LICENSE for details.
 --
@@ -67,9 +67,9 @@ local _buf = ffi.new("char[?]", k_url_len)
 
 function Parser.createParser(parserType)
    local parser = setmetatable({}, Parser)
-   if parserType == "request" then
+   if parserType == "REQUEST" then
       _intvalue = 0
-   elseif parserType == "response" then
+   elseif parserType == "RESPONSE" then
       _intvalue = 1
    else
       _intvalue = 2             -- both
@@ -109,10 +109,16 @@ local function _unpack_http(m_hp)
       tbl.url = url
    end
    if m_hp.head_kv ~= nil then
-      tbl.header = {}            
+      tbl.header = {}
       local kv = m_hp.head_kv
       while kv ~= nil do
-         tbl.header[ffi.string(kv.head_field)] = ffi.string(kv.head_value)
+         local field = kv.head_field
+         local value = kv.head_value ~= nil and ffi.string(kv.head_value) or ""
+         if field ~= nil then
+            tbl.header[ffi.string(field)] = value
+         else
+            tbl.header[#tbl.header + 1] = value
+         end
          kv = kv.next
       end
    end
@@ -138,11 +144,10 @@ function Parser:process(data)
       _intvalue = data:len() < k_url_len  and data:len() or k_url_len
       ffi.copy(_buf, data, _intvalue)
       nread = tonumber(hp_process(self.m_hp, _buf, _intvalue))
-      data = data:sub(nread)
       state = self.m_hp.process_state
       if self.m_state ~= tonumber(state) then
          if state == hp.PROCESS_STATE_BODY then
-            self.m_tbl = _unpack_http(self.m_hp) 
+            self.m_tbl = _unpack_http(self.m_hp)            
          elseif state == hp.PROCESS_STATE_FINISH then
             self.m_tbl = _unpack_http(self.m_hp)
          end
