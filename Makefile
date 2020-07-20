@@ -13,7 +13,7 @@ endif
 all: hyperparser.so
 
 hyperparser.so: src/http_parser.c src/pull_style_api.c
-	$(CC) $< -o $@ -I$(SRC) $(CFLAGS)
+	$(CC) $^ -o $@ -I$(SRC) $(CFLAGS)
 
 clean:
 	rm -rf *.so
