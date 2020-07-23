@@ -242,6 +242,7 @@ get_content(char *path, size_t *size) {
 }
 int main(int argc, char *argv[]) {
    if (argc < 3) {
+      printf("%s STYLE FILE", argv[0]);
       return 0;
    }
    int style = atoi(argv[1]);
@@ -249,7 +250,9 @@ int main(int argc, char *argv[]) {
    char *data = get_content(argv[2], &size);
    printf("--%ld --\n", size);
    http_t *h = mhttp_parser_create(style);
-   if (mhttp_parser_process(h, data, size) > 0) {
+   int nread = mhttp_parser_process(h, data, size);
+   if (nread > 0) {
+      printf("nread: %d\n", nread);
       printf("method: %s\n", h->method);      
       printf("process-state:%d, content-length:%d, readed:%d\n",
              h->process_state,
@@ -258,7 +261,7 @@ int main(int argc, char *argv[]) {
       printf("url: %s\n", h->url);
       printf("status: %d\n", h->status_code);
       printf("---- header fields ---\n");
-      head_tv_t *kv = NULL;
+      head_kv_t *kv = NULL;
       for ( kv=h->head_kv; kv; kv=kv->next) {
          printf("%s : %s\n", kv->head_field, kv->head_value);
       }

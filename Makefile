@@ -15,5 +15,7 @@ all: hyperparser.so
 hyperparser.so: src/http_parser.c src/pull_style_api.c
 	$(CC) $^ -o $@ -I$(SRC) $(CFLAGS)
 
+standalone: src/http_parser.c src/pull_style_api.c
+	$(CC) $^ -o hyperparser -I$(SRC) $(CFLAGS) -DTEST_PULL_STYLE_API
 clean:
-	rm -rf *.so
+	rm -rf *.so hyperparser
