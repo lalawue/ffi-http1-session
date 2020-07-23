@@ -16,7 +16,6 @@ typedef struct {
    http_parser parser;
    struct http_parser_settings settings;   
    unsigned char buf[HTTP_URL_LENGTH];
-   int buf_idx;
    data_t *last_data;
 } ctx_t;
 
@@ -160,10 +159,10 @@ mhttp_parser_process(http_t *h, char *data, int length) {
    return -1;
 }
 
-http_t*
-mhttp_parser_create(int parser_type) {
-   http_t *h = (http_t *)calloc(1, sizeof(*h));
-   ctx_t *ctx = (ctx_t *)calloc(1, sizeof(*ctx));
+static void
+_http_init(http_t *h, ctx_t *ctx, int parser_type) {
+   memset(h, 0, sizeof(*h));
+   memset(ctx, 0, sizeof(*ctx));
    /* initialize */
    h->opaque = ctx;
    /* parser */
@@ -183,29 +182,46 @@ mhttp_parser_create(int parser_type) {
    ctx->settings.on_message_complete = _msgcomplete;
    ctx->settings.on_status = _status;   
    ctx->settings.on_chunk_header = _chunkheader;
-   ctx->settings.on_chunk_complete = _chunkcomplete;
+   ctx->settings.on_chunk_complete = _chunkcomplete;   
+}
+
+http_t*
+mhttp_parser_create(int parser_type) {
+   http_t *h = (http_t *)calloc(1, sizeof(*h));
+   ctx_t *ctx = (ctx_t *)calloc(1, sizeof(*ctx));
+   _http_init(h, ctx, parser_type);
    return h;
+}
+
+static void
+_free_kv(head_kv_t *kv) {
+   while (kv) {
+      if (kv->head_field) {
+         free(kv->head_field);
+      }
+      if (kv->head_value) {
+         free(kv->head_value);
+      }
+      kv = kv->next;
+   }
+}
+
+static data_t*
+_free_data(data_t *head, int count) {
+   data_t *next = NULL;
+   for (int i=0; head && i<count; i++) {
+      next = head->next;
+      free(head);
+      head = next;
+   }
+   return head;
 }
 
 void
 mhttp_parser_destroy(http_t *h) {
    if (h) {
-      head_kv_t *kv = h->head_kv;
-      while (kv) {
-         if (kv->head_field) {
-            free(kv->head_field);
-         }
-         if (kv->head_value) {
-            free(kv->head_value);
-         }
-         kv = kv->next;
-      }
-      data_t *data = h->content;
-      while (data) {
-         data_t *next = data->next;
-         free(data);
-         data = next;
-      }
+      _free_kv(h->head_kv);
+      _free_data(h->content, INT_MAX);
       free(h->opaque);
       free(h);
    }
@@ -214,17 +230,19 @@ mhttp_parser_destroy(http_t *h) {
 void
 mhttp_parser_consume_data(http_t *h, int count) {
    if (h && count > 0) {
+      ctx_t *ctx = _ctx(h); 
+      h->content = _free_data(h->content, count);
+      ctx->last_data = h->content ? ctx->last_data : NULL;
+   }
+}
+
+void
+mhttp_parser_reset(http_t *h) {
+   if (h) {
       ctx_t *ctx = _ctx(h);
-      data_t *next = NULL;
-      data_t *head = h->content;
-      int i = 0;
-      for ( i=0; head && i<count; i++) {
-         next = head->next;
-         free(head);
-         head = next;
-      }
-      h->content = head;
-      ctx->last_data = head ? ctx->last_data : NULL;
+      _free_kv(h->head_kv);
+      _free_data(h->content, INT_MAX);
+      _http_init(h, ctx, ctx->parser.type);
    }
 }
 

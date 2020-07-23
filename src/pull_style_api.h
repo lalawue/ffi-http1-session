@@ -58,4 +58,7 @@ void mhttp_parser_consume_data(http_t *h, int count);
 /* return byte processed, -1 means error */
 int mhttp_parser_process(http_t *h, char *data, int length);
 
+/* reset http parser */
+void mhttp_parser_reset(http_t *h);
+
 #endif

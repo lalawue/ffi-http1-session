@@ -47,11 +47,8 @@ void mhttp_parser_destroy(http_t *h);
 /* return byte processed, -1 means error */
 int mhttp_parser_process(http_t *h, char *data, int length);
 
-/* in BODY process_state, you can consume data blocks, 
- * minimize the memory usage, and last block may be a 
- * partial one
- */
-void mhttp_parser_consume_data(http_t *h, int count);
+/* reset http parser */
+void mhttp_parser_reset(http_t *h);
 ]]
 
 local hp = ffi.load("hyperparser")
@@ -59,7 +56,7 @@ local hp = ffi.load("hyperparser")
 local hp_create = hp.mhttp_parser_create
 local hp_destroy = hp.mhttp_parser_destroy
 local hp_process = hp.mhttp_parser_process
-local hp_consume = hp.mhttp_parser_consume_data
+local hp_reset = hp.mhttp_parser_reset
 
 local k_url_len = 8192
 
@@ -133,13 +130,10 @@ local function _unpack_http(_hp)
     if _hp.content ~= nil then
         htbl.contents = {}
         local c = _hp.content
-        local data_count = 0
         while c ~= nil do
-            data_count = data_count + 1
             htbl.contents[#htbl.contents + 1] = ffi.string(c.data, c.data_pos)
             c = c.next
         end
-        hp_consume(_hp, data_count)
     end
     if _hp.err_msg ~= nil then
         htbl.err_msg = ffi.string(_hp.err_msg)
@@ -164,6 +158,7 @@ function Parser:process(data)
                 self._htbl = _unpack_http(self._hp)
             elseif state == hp.PROCESS_STATE_FINISH then
                 self._htbl = _unpack_http(self._hp)
+                hp_reset(self._hp) -- reset when finish
             end
             self._state = tonumber(state)
         end
