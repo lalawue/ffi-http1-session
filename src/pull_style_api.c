@@ -14,9 +14,11 @@
 
 typedef struct {
    http_parser parser;
-   struct http_parser_settings settings;   
-   unsigned char buf[HTTP_URL_LENGTH];
+   struct http_parser_settings settings;
+   char is_field;
+   int buf_pos;
    data_t *last_data;
+   unsigned char buf[HTTP_URL_LENGTH];
 } ctx_t;
 
 static inline http_t*
@@ -43,9 +45,21 @@ _status(http_parser* p, const char *at, size_t length) {
    return 0;
 }
 
+static char*
+_copy_header_kv(ctx_t *ctx) {
+   if (ctx->buf_pos > 0) {
+      char *buf = (char *)calloc(1, ctx->buf_pos + 1);
+      strncpy(buf, (char *)ctx->buf, ctx->buf_pos);
+      ctx->buf_pos = 0;
+      return buf;
+   }
+   return NULL;
+}
+
 static int
 _headerscomplete(http_parser* p) {
    http_t *h = _http(p);
+   ctx_t *ctx = _ctx(h);
    h->process_state = PROCESS_STATE_HEAD;
    h->method = http_method_str(p->method);
    h->status_code = p->status_code;
@@ -53,6 +67,10 @@ _headerscomplete(http_parser* p) {
       h->content_length = (unsigned int)p->content_length;
    } else {
       h->content_length = 0;
+   }
+   if (ctx->buf_pos > 0) {
+      head_kv_t *kv = h->head_kv;
+      kv->head_value = _copy_header_kv(ctx);
    }
    return 0;
 }
@@ -75,20 +93,34 @@ _url(http_parser* p, const char *at, size_t length) {
 static int
 _headerfield(http_parser* p, const char *at, size_t length) {
    http_t *h = _http(p);
-   head_kv_t *kv = (head_kv_t *)calloc(1, sizeof(head_kv_t));
-   kv->next = h->head_kv;
-   h->head_kv = kv;
-   kv->head_field = (char *)calloc(1, length + 1);
-   strncpy(kv->head_field, at, length);
+   ctx_t *ctx = _ctx(h);
+   if (!ctx->is_field) {
+      ctx->is_field = 1;
+      if (ctx->buf_pos > 0) {
+         head_kv_t *kv = h->head_kv;
+         kv->head_value = _copy_header_kv(ctx);
+      }
+   }
+   memcpy(&ctx->buf[ctx->buf_pos], at, length);
+   ctx->buf_pos += length;
    return 0;
 }
 
 static int
 _headervalue(http_parser* p, const char *at, size_t length) {
    http_t *h = _http(p);
-   head_kv_t *kv = h->head_kv;
-   kv->head_value = (char *)calloc(1, length + 1);
-   strncpy(kv->head_value, at, length);
+   ctx_t *ctx = _ctx(h);
+   if (ctx->is_field) {
+      ctx->is_field = 0;
+      if (ctx->buf_pos > 0) {
+         head_kv_t *kv = (head_kv_t *)calloc(1, sizeof(head_kv_t));
+         kv->next = h->head_kv;
+         h->head_kv = kv;
+         kv->head_field = _copy_header_kv(ctx);
+      }
+   }
+   memcpy(&ctx->buf[ctx->buf_pos], at, length);
+   ctx->buf_pos += length;
    return 0;
 }
 
