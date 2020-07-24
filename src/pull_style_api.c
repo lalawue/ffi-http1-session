@@ -34,7 +34,7 @@ _ctx(http_t *h) {
 static int
 _msgbegin(http_parser* p) {
    http_t *h = _http(p);
-   h->process_state = PROCESS_STATE_HEAD;
+   h->process_state = PROCESS_STATE_BEGIN;
    return 0;
 }
 
@@ -46,7 +46,7 @@ _status(http_parser* p, const char *at, size_t length) {
 static int
 _headerscomplete(http_parser* p) {
    http_t *h = _http(p);
-   h->process_state = PROCESS_STATE_BODY;
+   h->process_state = PROCESS_STATE_HEAD;
    h->method = http_method_str(p->method);
    h->status_code = p->status_code;
    if (p->content_length < ULLONG_MAX) {
@@ -133,6 +133,7 @@ _body(http_parser* p, const char *at, size_t length) {
    http_t *h = _http(p);
    int input_pos = 0;
    unsigned char *input = (unsigned char *)at;
+   h->process_state = PROCESS_STATE_BODY;
    do {
       data_t *data = _next_data(h);
       int copy_length = _copy_length(data, length - input_pos);

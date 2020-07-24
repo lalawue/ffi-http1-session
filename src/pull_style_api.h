@@ -13,9 +13,10 @@
 /* parsing state */
 typedef enum {
    PROCESS_STATE_INVALID = 0,   /* not begin, or encouter error */
-   PROCESS_STATE_HEAD = 1,      /* begin header step */
-   PROCESS_STATE_BODY = 2,      /* begin body step */
-   PROCESS_STATE_FINISH = 3     /* all finished */
+   PROCESS_STATE_BEGIN = 1,     /* begin message */
+   PROCESS_STATE_HEAD = 2,      /* header data comlete */
+   PROCESS_STATE_BODY = 3,      /* begin body data */
+   PROCESS_STATE_FINISH = 4,    /* message finished */
 } process_state_t;
 
 /* http header field */
@@ -49,14 +50,14 @@ typedef struct s_http {
 http_t* mhttp_parser_create(int parser_type);
 void mhttp_parser_destroy(http_t *h);
 
+/* return byte processed, -1 means error */
+int mhttp_parser_process(http_t *h, char *data, int length);
+
 /* in BODY process_state, you can consume data blocks, 
  * minimize the memory usage, and last block may be a 
  * partial one
  */
 void mhttp_parser_consume_data(http_t *h, int count);
-
-/* return byte processed, -1 means error */
-int mhttp_parser_process(http_t *h, char *data, int length);
 
 /* reset http parser */
 void mhttp_parser_reset(http_t *h);
