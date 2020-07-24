@@ -163,8 +163,8 @@ function Parser:process(data)
         _intvalue = data:len() < k_url_len and data:len() or k_url_len
         ffi.copy(_buf, data, _intvalue)
         nread = tonumber(hp_process(self._hp, _buf, _intvalue))
-        state = self._hp.process_state
-        if self._state ~= tonumber(state) then
+        state = tonumber(self._hp.process_state)
+        if self._state ~= state then
             if state == hp.PROCESS_STATE_HEAD then
                 self._htbl = _unpack_http(self._hp, self._htbl)
             elseif state == hp.PROCESS_STATE_BODY then
@@ -173,7 +173,7 @@ function Parser:process(data)
                 self._htbl = _unpack_http(self._hp, self._htbl)
                 hp_reset(self._hp) -- reset when finish
             end
-            self._state = tonumber(state)
+            self._state = state
         end
         data = data:len() > nread and data:sub(nread + 1) or ""
     until nread <= 0 or data:len() <= 0
