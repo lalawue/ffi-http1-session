@@ -141,12 +141,12 @@ _next_data(http_t *h) {
    ctx_t *ctx= _ctx(h);      
    data_t *data = h->content;
    if (!data) {
-      data = (data_t *)malloc(sizeof(data_t));
+      data = (data_t *)calloc(1, sizeof(data_t));
       memset(data, 0, sizeof(data_t));
       h->content = data;
       ctx->last_data = data;
    } else if (data->data_pos >= HTTP_URL_LENGTH) {
-      data = (data_t *)malloc(sizeof(data_t));
+      data = (data_t *)calloc(1, sizeof(data_t));
       memset(data, 0, sizeof(data_t));
       ctx->last_data->next = data;
       ctx->last_data = data;
