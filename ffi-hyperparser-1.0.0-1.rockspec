@@ -1,19 +1,20 @@
-package = "hyperparser"
-version = "1.4-1"
+package = "ffi-hyperparser"
+version = "1.0.0-1"
 source = {
-   url = "git+https://github.com/lalawue/hyperparser.git"
+   url = "git+https://github.com/lalawue/ffi_hyperparser.git"
 }
 description = {
    summary = "Socket utilities",
-   detailed = "Lua bindings to http parser library",
-   homepage = "https://github.com/lalawue/hyperparser",
-   license = "MIT/X11"
+   detailed = "FFI bindings to http parser library",
+   homepage = "https://github.com/lalawue/ffi_hyperparser",
+   license = "MIT/X11",
+   maintainer = "lalawue <suchaaa@gmail.com>"
 }
 dependencies = {
-    "lua >= 5.1"
+    "luajit 2.0"
 }
 supported_platforms = {
-   "macosx", "freebsd", "linux"
+   "macosx", "freebsd", "linux", "windows"
 }
 build = {
    type = "builtin",
