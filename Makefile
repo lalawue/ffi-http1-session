@@ -7,7 +7,7 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S), Darwin)
 	CFLAGS=-O3 -bundle -undefined dynamic_lookup
 else
-        CFLAGS=-O3 -shared -fPIC
+        CFLAGS=-O3 -shared -fPIC -std=c99
 endif
 
 all: hyperparser.so
