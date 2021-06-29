@@ -17,17 +17,17 @@ typedef struct {
    struct http_parser_settings settings;
    char is_field;
    int buf_pos;
-   data_t *last_data;
+   http_data_t *last_data;
    unsigned char buf[HTTP_URL_LENGTH];
 } ctx_t;
 
-static inline http_t*
+static inline http_ctx_t*
 _http(http_parser *p) {
-   return (http_t *)p->data;
+   return (http_ctx_t *)p->data;
 }
 
 static inline ctx_t*
-_ctx(http_t *h) {
+_ctx(http_ctx_t *h) {
    return (ctx_t *)h->opaque;
 }
 
@@ -35,7 +35,7 @@ _ctx(http_t *h) {
  */
 static int
 _msgbegin(http_parser* p) {
-   http_t *h = _http(p);
+   http_ctx_t *h = _http(p);
    h->process_state = PROCESS_STATE_BEGIN;
    return 0;
 }
@@ -58,7 +58,7 @@ _copy_header_kv(ctx_t *ctx) {
 
 static int
 _headerscomplete(http_parser* p) {
-   http_t *h = _http(p);
+   http_ctx_t *h = _http(p);
    ctx_t *ctx = _ctx(h);
    h->process_state = PROCESS_STATE_HEAD;
    h->method = http_method_str(p->method);
@@ -69,7 +69,7 @@ _headerscomplete(http_parser* p) {
       h->content_length = 0;
    }
    if (ctx->buf_pos > 0) {
-      head_kv_t *kv = h->head_kv;
+      http_head_kv_t *kv = h->head_kv;
       kv->head_value = _copy_header_kv(ctx);
    }
    return 0;
@@ -77,14 +77,14 @@ _headerscomplete(http_parser* p) {
 
 static int
 _msgcomplete(http_parser* p) {
-   http_t *h = _http(p);
+   http_ctx_t *h = _http(p);
    h->process_state = PROCESS_STATE_FINISH;
    return 0;
 }
 
 static int
 _url(http_parser* p, const char *at, size_t length) {
-   http_t *h = _http(p);
+   http_ctx_t *h = _http(p);
    memset(h->url, 0, HTTP_URL_LENGTH);
    strncpy(h->url, at, length);
    return 0;
@@ -92,12 +92,12 @@ _url(http_parser* p, const char *at, size_t length) {
 
 static int
 _headerfield(http_parser* p, const char *at, size_t length) {
-   http_t *h = _http(p);
+   http_ctx_t *h = _http(p);
    ctx_t *ctx = _ctx(h);
    if (!ctx->is_field) {
       ctx->is_field = 1;
       if (ctx->buf_pos > 0) {
-         head_kv_t *kv = h->head_kv;
+         http_head_kv_t *kv = h->head_kv;
          kv->head_value = _copy_header_kv(ctx);
       }
    }
@@ -108,12 +108,12 @@ _headerfield(http_parser* p, const char *at, size_t length) {
 
 static int
 _headervalue(http_parser* p, const char *at, size_t length) {
-   http_t *h = _http(p);
+   http_ctx_t *h = _http(p);
    ctx_t *ctx = _ctx(h);
    if (ctx->is_field) {
       ctx->is_field = 0;
       if (ctx->buf_pos > 0) {
-         head_kv_t *kv = (head_kv_t *)calloc(1, sizeof(head_kv_t));
+         http_head_kv_t *kv = (http_head_kv_t *)calloc(1, sizeof(http_head_kv_t));
          kv->next = h->head_kv;
          h->head_kv = kv;
          kv->head_field = _copy_header_kv(ctx);
@@ -126,7 +126,7 @@ _headervalue(http_parser* p, const char *at, size_t length) {
 
 static int
 _chunkheader(http_parser* p) {
-   http_t *h = _http(p);
+   http_ctx_t *h = _http(p);
    h->content_length = 0;
    return 0;
 }
@@ -136,18 +136,18 @@ _chunkcomplete(http_parser* p) {
    return 0;
 }
 
-static inline data_t*
-_next_data(http_t *h) {
+static inline http_data_t*
+_next_data(http_ctx_t *h) {
    ctx_t *ctx= _ctx(h);      
-   data_t *data = h->content;
+   http_data_t *data = h->content;
    if (!data) {
-      data = (data_t *)calloc(1, sizeof(data_t));
-      memset(data, 0, sizeof(data_t));
+      data = (http_data_t *)calloc(1, sizeof(http_data_t));
+      memset(data, 0, sizeof(http_data_t));
       h->content = data;
       ctx->last_data = data;
    } else if (data->data_pos >= HTTP_URL_LENGTH) {
-      data = (data_t *)calloc(1, sizeof(data_t));
-      memset(data, 0, sizeof(data_t));
+      data = (http_data_t *)calloc(1, sizeof(http_data_t));
+      memset(data, 0, sizeof(http_data_t));
       ctx->last_data->next = data;
       ctx->last_data = data;
    }
@@ -155,19 +155,19 @@ _next_data(http_t *h) {
 }
 
 static inline int
-_copy_length(data_t *data, size_t input_length) {
+_copy_length(http_data_t *data, size_t input_length) {
    int left_size = HTTP_URL_LENGTH - data->data_pos;
    return left_size < input_length ? left_size : input_length;
 }
 
 static int
 _body(http_parser* p, const char *at, size_t length) {
-   http_t *h = _http(p);
+   http_ctx_t *h = _http(p);
    int input_pos = 0;
    unsigned char *input = (unsigned char *)at;
    h->process_state = PROCESS_STATE_BODY;
    do {
-      data_t *data = _next_data(h);
+      http_data_t *data = _next_data(h);
       int copy_length = _copy_length(data, length - input_pos);
       memcpy(&data->data[data->data_pos], &input[input_pos], copy_length);
       data->data_pos += copy_length;
@@ -178,7 +178,7 @@ _body(http_parser* p, const char *at, size_t length) {
 
 /* return byte processed, -1 means error */
 int
-mhttp_parser_process(http_t *h, char *data, int length) {
+mhttp_parser_process(http_ctx_t *h, char *data, int length) {
    if (h && data && length > 0) {
       ctx_t *ctx= _ctx(h);
       int nparsed = http_parser_execute(&ctx->parser, &ctx->settings, data, length);
@@ -193,7 +193,7 @@ mhttp_parser_process(http_t *h, char *data, int length) {
 }
 
 static void
-_http_init(http_t *h, ctx_t *ctx, int parser_type) {
+_http_init(http_ctx_t *h, ctx_t *ctx, int parser_type) {
    memset(h, 0, sizeof(*h));
    memset(ctx, 0, sizeof(*ctx));
    /* initialize */
@@ -218,16 +218,16 @@ _http_init(http_t *h, ctx_t *ctx, int parser_type) {
    ctx->settings.on_chunk_complete = _chunkcomplete;   
 }
 
-http_t*
+http_ctx_t*
 mhttp_parser_create(int parser_type) {
-   http_t *h = (http_t *)calloc(1, sizeof(*h));
+   http_ctx_t *h = (http_ctx_t *)calloc(1, sizeof(*h));
    ctx_t *ctx = (ctx_t *)calloc(1, sizeof(*ctx));
    _http_init(h, ctx, parser_type);
    return h;
 }
 
 static void
-_free_kv(head_kv_t *kv) {
+_free_kv(http_head_kv_t *kv) {
    while (kv) {
       if (kv->head_field) {
          free(kv->head_field);
@@ -239,9 +239,9 @@ _free_kv(head_kv_t *kv) {
    }
 }
 
-static data_t*
-_free_data(data_t *head, int count) {
-   data_t *next = NULL;
+static http_data_t*
+_free_data(http_data_t *head, int count) {
+   http_data_t *next = NULL;
    for (int i=0; head && i<count; i++) {
       next = head->next;
       free(head);
@@ -251,7 +251,7 @@ _free_data(data_t *head, int count) {
 }
 
 void
-mhttp_parser_destroy(http_t *h) {
+mhttp_parser_destroy(http_ctx_t *h) {
    if (h) {
       _free_kv(h->head_kv);
       _free_data(h->content, INT_MAX);
@@ -261,7 +261,7 @@ mhttp_parser_destroy(http_t *h) {
 }
 
 void
-mhttp_parser_consume_data(http_t *h, int count) {
+mhttp_parser_consume_data(http_ctx_t *h, int count) {
    if (h && count > 0) {
       ctx_t *ctx = _ctx(h); 
       h->content = _free_data(h->content, count);
@@ -270,12 +270,22 @@ mhttp_parser_consume_data(http_t *h, int count) {
 }
 
 void
-mhttp_parser_reset(http_t *h) {
+mhttp_parser_reset(http_ctx_t *h) {
    if (h) {
       ctx_t *ctx = _ctx(h);
       _free_kv(h->head_kv);
       _free_data(h->content, INT_MAX);
       _http_init(h, ctx, ctx->parser.type);
+   }
+}
+
+void
+mhttp_parser_version(http_version_t *v) {
+   if (v) {
+      unsigned long version = http_parser_version();
+      v->major = (version >> 16) & 255;
+      v->minor = (version >> 8) & 255;
+      v->patch = version & 255;
    }
 }
 
@@ -300,7 +310,7 @@ int main(int argc, char *argv[]) {
    size_t size = 0;
    char *data = get_content(argv[2], &size);
    printf("--%ld --\n", size);
-   http_t *h = mhttp_parser_create(style);
+   http_ctx_t *h = mhttp_parser_create(style);
    int nread = mhttp_parser_process(h, data, size);
    if (nread > 0) {
       printf("nread: %d\n", nread);
@@ -312,12 +322,12 @@ int main(int argc, char *argv[]) {
       printf("url: %s\n", h->url);
       printf("status: %d\n", h->status_code);
       printf("---- header fields ---\n");
-      head_kv_t *kv = NULL;
+      http_head_kv_t *kv = NULL;
       for ( kv=h->head_kv; kv; kv=kv->next) {
          printf("%s : %s\n", kv->head_field, kv->head_value);
       }
       printf("---- data:%d ---\n", h->content_length);
-      data_t *data = NULL;
+      http_data_t *data = NULL;
       for ( data=h->content; data; data=data->next) {
          printf("%s", data->data);
       }
