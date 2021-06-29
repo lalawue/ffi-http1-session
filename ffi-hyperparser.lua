@@ -68,6 +68,21 @@ void mhttp_parser_reset(http_ctx_t *h);
 
 /* get http version */
 void mhttp_parser_version(http_version_t *v);
+
+struct http_parser_url {
+  uint16_t field_set;           /* Bitmask of (1 << UF_*) values */
+  uint16_t port;                /* Converted UF_PORT string */
+
+  struct {
+    uint16_t off;               /* Offset into buffer in which field starts */
+    uint16_t len;               /* Length of run in buffer */
+  } field_data[7];
+};
+
+/* Parse a URL; return nonzero on failure */
+int http_parser_parse_url(const char *buf, size_t buflen,
+                          int is_connect,
+                          struct http_parser_url *u);
 ]])
 
 -- try to load mnet in package.cpath
@@ -210,6 +225,27 @@ function Parser:reset()
     self._state = -1
     self._htbl = {}
     self._data = ""
+end
+
+function Parser.parseURL(url, is_connect)
+    local tbl = {  }    
+    if type(url) ~= "string" or url:len() <= 0 then
+        return {}
+    end
+    local ctx = ffi.new("struct http_parser_url")
+    HP.http_parser_parse_url(url, url:len(), is_connect and 1 or 0, ctx)
+    local fdata = ctx.field_data
+    local kv = { "schema", "host", "port", "path", "query", "fragment", "userinfo", "max" }
+    for i=0, 6 do
+        local len = fdata[i].len
+        if len <= 0 then
+            goto NEXT_LOOP
+        end
+        local s = fdata[i].off + 1        
+        tbl[kv[i+1]] = url:sub(s, s + len - 1)        
+        ::NEXT_LOOP::
+    end
+    return tbl
 end
 
 return Parser

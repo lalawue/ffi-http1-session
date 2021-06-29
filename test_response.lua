@@ -36,15 +36,31 @@ cdn-source: baishan
 <center>Tue, 29 Jun 2021 15:12:36 GMT (taikoo/BC22_dx-guangdong-zhuhai-16-cache-5)</center></BODY></HTML>
 <!-- web cache -->
 ]]
-local parser = HP.createParser("RESPONSE")
-local nread, state, htbl = parser:process(res)
-print(string.format("\n---- response readed:%d, state:%d", nread, state))
-for k, v in pairs(htbl) do
-  print(k, v)
-end
+  local parser = HP.createParser("RESPONSE")
+  local nread, state, htbl = parser:process(res)
+  print(string.format("\n---- response readed:%d, state:%d", nread, state))
+  for k, v in pairs(htbl) do
+    print(k, v)
+  end
 end
 
 -- parse url
--- local url = "http://www.example.com:80/main?name=123#part"
--- local uparser = HP.parseurl(url)
--- print("\nurl parsed:", uparser.schema, uparser.host, uparser.port, uparser.path, uparser.query, uparser.fragment, uparser.userinfo)
+do
+  local url = "http://www.example.com:80/web/main?name=123&age=99#anchor"
+  local info = HP.parseURL(url)
+  print("\n---- req url info ----")
+  for k, v in pairs(info) do
+    print(k, v)
+  end
+end
+
+do
+  local url = "/web/index?key=val&key2=val2#anchor"
+  local info = HP.parseURL(url, true)
+  print("\n---- response url info ----")
+  for k, v in pairs(info) do
+    print(k, v)
+  end  
+end
+
+--print("\nurl parsed:", uparser.schema, uparser.host, uparser.port, uparser.path, uparser.query, uparser.fragment, uparser.userinfo)
