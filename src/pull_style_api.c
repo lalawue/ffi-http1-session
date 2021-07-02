@@ -242,7 +242,8 @@ _free_kv(http_head_kv_t *kv) {
 static http_data_t*
 _free_data(http_data_t *head, int count) {
    http_data_t *next = NULL;
-   for (int i=0; head && i<count; i++) {
+   int i = 0;
+   for ( i=0; head && i<count; i++) {
       next = head->next;
       free(head);
       head = next;
