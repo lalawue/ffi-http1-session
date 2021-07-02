@@ -19,14 +19,9 @@ supported_platforms = {
 build = {
    type = "builtin",
    modules = {
+      ["ffi-hyperparser"] = "ffi-hyperparser.lua",
       hyperparser = {
-         ffi_hyperparser = {
-            "ffi-hyperparser.lua"
-         },
-         sources = {
-            "src/http_parser.c",
-            "src/pull_style_api.c"
-         }
+         sources = { "src/http_parser.c", "src/pull_style_api.c" }
       }
    }
 }
