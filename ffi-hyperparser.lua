@@ -87,15 +87,18 @@ int http_parser_parse_url(const char *buf, size_t buflen,
 
 -- try to load mnet in package.cpath
 local ret, HP = nil, nil
-for cpath in package.cpath:gmatch("[^;]+") do
-    local path = cpath:sub(1, cpath:len() - 4) .. "hyperparser.so"
-    ret, HP = pcall(ffi.load, path)
-    if ret then
-        goto SUCCESS_LOAD_LABEL
+do
+    local suffix = jit.os == "Windows" and "dll" or "so"
+    for cpath in package.cpath:gmatch("[^;]+") do
+        local path = cpath:sub(1, cpath:len() - 2 - suffix:len()) .. "hyperparser." .. suffix
+        ret, HP = pcall(ffi.load, path)
+        if ret then
+            goto SUCCESS_LOAD_LABEL
+        end
     end
+    error(HP)
+    ::SUCCESS_LOAD_LABEL::
 end
-error(HP)
-::SUCCESS_LOAD_LABEL::
 
 local k_url_len = 8192
 
