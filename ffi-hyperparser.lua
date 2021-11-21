@@ -106,8 +106,8 @@ local assert = assert
 local tonumber = tonumber
 local setmetatable = setmetatable
 local sfmt = string.format
-local ffi_str = ffi_str
-local ffi_copy = ffi_copy
+local ffi_str = ffi.string
+local ffi_copy = ffi.copy
 
 local k_url_len = 8192
 

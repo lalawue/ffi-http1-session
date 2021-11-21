@@ -1,5 +1,5 @@
 package = "ffi-hyperparser"
-version = "1.0.4-1"
+version = "1.0.4-2"
 source = {
    url = "git+https://github.com/lalawue/ffi-hyperparser.git",
    tag = "1.0.4"
