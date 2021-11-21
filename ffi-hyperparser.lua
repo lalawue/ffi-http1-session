@@ -100,6 +100,12 @@ do
     ::SUCCESS_LOAD_LABEL::
 end
 
+local type = type
+local assert = assert
+local tonumber = tonumber
+local setmetatable = setmetatable
+local sfmt = string.format
+
 local k_url_len = 8192
 
 local Parser = {
@@ -115,7 +121,7 @@ local _buf = ffi.new("char[?]", k_url_len)
 function Parser.version()
     local v = ffi.new("http_version_t")
     HP.mhttp_parser_version(v)
-    return string.format("%d.%d.%d", v.major, v.minor, v.patch)
+    return sfmt("%d.%d.%d", v.major, v.minor, v.patch)
 end
 
 function Parser.createParser(parserType)
@@ -231,9 +237,9 @@ function Parser:reset()
 end
 
 function Parser.parseURL(url, is_connect)
-    local tbl = {  }    
+    local tbl = {}
     if type(url) ~= "string" or url:len() <= 0 then
-        return {}
+        return tbl
     end
     local ctx = ffi.new("struct http_parser_url")
     HP.http_parser_parse_url(url, url:len(), is_connect and 1 or 0, ctx)
@@ -241,12 +247,10 @@ function Parser.parseURL(url, is_connect)
     local kv = { "schema", "host", "port", "path", "query", "fragment", "userinfo", "max" }
     for i=0, 6 do
         local len = fdata[i].len
-        if len <= 0 then
-            goto NEXT_LOOP
+        if len > 0 then
+            local s = fdata[i].off + 1
+            tbl[kv[i+1]] = url:sub(s, s + len - 1)
         end
-        local s = fdata[i].off + 1        
-        tbl[kv[i+1]] = url:sub(s, s + len - 1)        
-        ::NEXT_LOOP::
     end
     return tbl
 end
