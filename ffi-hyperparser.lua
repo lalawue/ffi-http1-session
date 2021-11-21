@@ -101,10 +101,13 @@ do
 end
 
 local type = type
+local pairs = pairs
 local assert = assert
 local tonumber = tonumber
 local setmetatable = setmetatable
 local sfmt = string.format
+local ffi_str = ffi_str
+local ffi_copy = ffi_copy
 
 local k_url_len = 8192
 
@@ -145,13 +148,24 @@ function Parser:destroy()
         HP.mhttp_parser_destroy(self._hp)
         self._hp = nil
         self._state = -1
-        self._htbl = nil
         self._data = ""
+        for k, _ in pairs(self._htbl) do
+            self._htbl[k] = nil
+        end
+    end
+end
+
+-- reset parser, ready for next parse
+function Parser:reset()
+    self._state = -1
+    self._data = ""
+    for k, _ in pairs(self._htbl) do
+        self._htbl[k] = nil
     end
 end
 
 local function _unpack_http(_hp, htbl)
-    local method = ffi.string(_hp.method)
+    local method = ffi_str(_hp.method)
     if not method:find("<") then
         htbl.method = method
     end
@@ -164,7 +178,7 @@ local function _unpack_http(_hp, htbl)
         htbl.content_length = content_length
     end
     htbl.readed_length = tonumber(_hp.readed_length)
-    local url = ffi.string(_hp.url)
+    local url = ffi_str(_hp.url)
     if url:len() > 0 then
         htbl.url = url
     end
@@ -173,9 +187,9 @@ local function _unpack_http(_hp, htbl)
         local kv = _hp.head_kv
         while kv ~= nil do
             local field = kv.head_field
-            local value = kv.head_value ~= nil and ffi.string(kv.head_value) or ""
+            local value = kv.head_value ~= nil and ffi_str(kv.head_value) or ""
             if field ~= nil then
-                htbl.header[ffi.string(field)] = value
+                htbl.header[ffi_str(field)] = value
             else
                 htbl.header[#htbl.header + 1] = value
             end
@@ -188,13 +202,13 @@ local function _unpack_http(_hp, htbl)
         local c = _hp.content
         while c ~= nil do
             data_count = data_count + 1
-            htbl.contents[#htbl.contents + 1] = ffi.string(c.data, c.data_pos)
+            htbl.contents[#htbl.contents + 1] = ffi_str(c.data, c.data_pos)
             c = c.next
         end
         HP.mhttp_parser_consume_data(_hp, data_count) -- consume data count from parser
     end
     if _hp.err_msg ~= nil then
-        htbl.err_msg = ffi.string(_hp.err_msg)
+        htbl.err_msg = ffi_str(_hp.err_msg)
     end
     return htbl
 end
@@ -208,7 +222,7 @@ function Parser:process(data)
     data = self._data .. data
     repeat
         _intvalue = data:len() < k_url_len and data:len() or k_url_len
-        ffi.copy(_buf, data, _intvalue)
+        ffi_copy(_buf, data, _intvalue)
         local count = tonumber(HP.mhttp_parser_process(self._hp, _buf, _intvalue))
 	    nread = nread + count
         state = tonumber(self._hp.process_state)
@@ -227,13 +241,6 @@ function Parser:process(data)
     until count <= 0 or data:len() <= 0
     self._data = data
     return nread, self._state, self._htbl
-end
-
--- reset parser, ready for next parse
-function Parser:reset()
-    self._state = -1
-    self._htbl = {}
-    self._data = ""
 end
 
 function Parser.parseURL(url, is_connect)
