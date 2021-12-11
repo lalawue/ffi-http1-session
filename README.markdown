@@ -4,13 +4,15 @@ It runs on *BSD and Linux. Windows was not tested.
 
 support LuaJIT's pull-style api, require luarocks to make.
 
-### Compilation
+## Install or Compilation
+
+   $ luarocks install ffi-hyperparser
 
 Needs luarocks to compile and install:
 
     $ [sudo] make
 
-### Usage:
+## Usage:
 
 Using pull-style API:
 
@@ -77,6 +79,11 @@ print("-- test response:")
 getResult( testResponse() )
 ```
 
-### Origin
+## Origin
 
 from https://github.com/armatys/hyperparser
+
+## Used in
+
+- [Cincau](https://github.com/lalawue/cincau)
+- [rpc_framework](https://github.com/lalawue/rpc_framework)
