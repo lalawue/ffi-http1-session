@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "inet.h": "c",
+        "in.h": "c",
+        "stdint.h": "c",
+        "mhttp1_session.h": "c",
+        "limits.h": "c",
+        "http_parser.h": "c",
+        "m_prng.h": "c",
+        "sha1.h": "c",
+        "wjcryptlib_sha1.h": "c",
+        "stdint-gcc.h": "c"
+    }
+}

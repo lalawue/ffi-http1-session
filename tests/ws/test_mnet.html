@@ -1,0 +1,54 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+   <meta charset="utf-8">
+   <title>MNet WebSocket Testing</title>
+
+   <script type="text/javascript">
+      function WebSocketTest() {
+         if ("WebSocket" in window) {
+            alert("Your browser support WebSocket!");
+
+            var ws = new WebSocket("ws://127.0.0.1:9010/mnet_ws");
+
+            ws.onopen = function () {
+               ws.send("send text data 1");
+               alert("WS opened, send text data 1...");
+            };
+
+            ws.onmessage = function (evt) {
+               alert("data received: '" + evt.data + "'");
+            };
+
+            ws.onclose = function () {
+               alert("WS closed");
+            };
+
+            setTimeout(function () {
+               ws.send("send text data 2");
+               alert("send text data 2");
+            }, 2000);
+
+            setTimeout(function () {
+               alert("WS closing...");
+               ws.close();
+            }, 4000);
+         }
+         else {
+            alert("Your browser not support WebSocket!");
+         }
+      }
+   </script>
+
+</head>
+
+<body>
+
+   <div id="sse">
+      <a href="javascript:WebSocketTest()">Test WebSocket</a>
+   </div>
+
+</body>
+
+</html>

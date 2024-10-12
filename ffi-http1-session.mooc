@@ -1,0 +1,404 @@
+--
+-- Copyright (c) 2024 lalawue
+--
+-- This library is free software; you can redistribute it and/or modify it
+-- under the terms of the MIT license. See LICENSE for details.
+--
+
+import FFI from "ffi"
+import ZlibStream from "ffi-http1-session.zlib-stream"
+
+FFI.cdef([[
+    typedef struct s_mssn_data {
+        int length;
+        struct s_mssn_data *next;
+        uint8_t *data;
+    } mssn_data_t;
+
+    typedef struct s_mssn_header {
+        const char *key;
+        const char *value;
+        struct s_mssn_header *next;
+    } mssn_header_t;
+
+    typedef enum {
+        HTTP_FRAME_FIN = 1,   // HTTP BODY finished
+        HTTP_FRAME_CONS = 2,  // HTTP BODY chunked data
+        WS_FRAME_PING = 3,    // WS PING frame
+        WS_FRAME_PONG = 4,    // WS PONG frame
+        WS_FRAME_FIN = 5,     // WS fin data frame
+        WS_FRAME_CONS = 6     // WS contines data frame
+    } mssn_frame_type;
+
+    typedef struct s_mssn_frame {
+        mssn_frame_type ftype;      // frame type
+        mssn_data_t *data;          // frame data
+        mssn_data_t *data_last;     // frame data last
+        struct s_mssn_frame *next;  // next frame
+    } mssn_frame_t;
+
+    typedef enum {
+        MSSN_STATE_INIT = 0,
+        MSSN_STATE_BEGIN,  // has begin process data
+        MSSN_STATE_HEADER, // header complete
+        MSSN_STATE_BODY,   // begin body/frame data
+        MSSN_STATE_FINISH, // HTTP body complete, WEBSOCKET frame closed
+        MSSN_STATE_ERROR,  // parsing error, you should close context
+    } mssn_state_t;
+
+    typedef struct {
+        mssn_state_t state;     // state for last processing
+        const char *method;     // method
+        const char *path;       // path
+        int status;             // http status code
+        int upgrade;            // upgrade to websocket
+        mssn_header_t *headers; // header
+        mssn_frame_t *frames;   // frames for last processing
+        char *error_msg;        // error message
+        void *opaque;           // internal use
+    } mssn_t;
+
+    /// @brief create context
+    /// @return context
+    mssn_t* mssn_create(int);
+
+    /// @brief close context
+    void mssn_close(mssn_t *ctx);
+
+    /// @brief return data consumed
+    // - return < 0, encounter underlying connection error
+    // - return = 0, need more data
+    // - return > 0, has consume data bytes, and complete frames in context
+    int mssn_process(mssn_t *, const uint8_t *data, int data_length);
+
+    /// @brief build websocket binary frame data, data will be fragment but control frame
+    /// @param ctx context
+    /// @param ftype websocket frame type
+    /// @param rsv_bits rsv 3 bits
+    /// @param frame_size max frame size including websocket header
+    /// @param buf data to be send
+    /// @param buf_len data length
+    /// @return every mssn_data_t is a compact websocket frame
+    mssn_data_t *mssn_build(mssn_t *ctx,
+                            mssn_frame_type ftype,
+                            int rsv_bits,
+                            size_t frame_size,
+                            const uint8_t *buf,
+                            size_t buf_len);
+
+    /// @brief reclaim frames, headers, datas if needed
+    /// @param ctx context
+    /// @param data_build data from mssn_build
+    void mssn_reclaim(mssn_t *ctx, mssn_data_t *data_build);
+
+    void mssn_sha1(const uint8_t *data, int data_len, uint8_t *digest);
+]])
+
+-- try to load lihttp1_sessione.cpath
+local ret, mlib = nil, nil
+do {
+    suffix = (jit.os == "Windows") and "dll" or "so"
+    for cpath in package.cpath:gmatch("[^;]+") {
+        path = cpath:sub(1, cpath:len() - 2 - suffix:len()) .. "http1_session." .. suffix
+        ret, mlib = pcall(FFI.load, path)
+        if ret {
+            goto SUCCESS_LOAD_LABEL
+        }
+    }
+    error(mlib)
+    ::SUCCESS_LOAD_LABEL::
+}
+
+local type = type
+local pairs = pairs
+local assert = assert
+local tonumber = tonumber
+local setmetatable = setmetatable
+local tbl_insert = table.insert
+local sfmt = string.format
+local math_min = math.min
+local ffi_str = FFI.string
+local ffi_copy = FFI.copy
+local sha1_buf = FFI.new("uint8_t[?]", 20)
+
+class Http1Session {
+
+    STATE_INIT = 0
+    STATE_BEGIN = 1  -- has begin process data
+    STATE_HEADER = 2 -- header complete
+    STATE_BODY = 3   -- begin body/frame data
+    STATE_FINISH = 4 -- HTTP body complete, WEBSOCKET frame closed
+    STATE_ERROR = 5  -- parsing error, you should close context
+
+    --- init
+    ---@param server boolean, true as server
+    ---@param compress boolean, true for using zstream, or checking by HTTP header in server
+    fn init(server, compress) {
+        self._lib = mlib.mssn_create(server and 1 or 0)
+        self._data = "" -- for reading
+        self._tbl = {} -- for store header info
+        self._upgrade = false
+        self._state = Self.STATE_INIT
+        if compress {
+            self._zstream = ZlibStream()
+        } else {
+            self._zstream = nil -- zlib stream for websocket
+        }
+        self._sec_key_raw = "" -- sec web socket key for websocket http response
+    }
+
+    fn deinit() {
+        self:closeSession()
+    }
+
+    --- close session, release C lever resources
+    fn closeSession() {
+        self:reclaim(true)
+        self._upgrade = false
+        if self._lib ~= nil {
+            mlib.mssn_close(self._lib)
+            self._lib = nil
+        }
+        if self._zstream ~= nil {
+            self._zstream:destroy()
+            self._zstream = nil
+        }
+    }
+
+    -- if received upgrade in http header
+    fn isUpgrade() {
+        return self._upgrade == true
+    }
+
+    -- return session state
+    -- @return number as STATE_INIT, STATE_BEGIN, ..., STATE_FINISH, STATE_ERROR
+    fn state() {
+        return self._state
+    }
+
+    -- return sec websocket accept raw http header
+    fn basicSecAcceptHeader(base64_sec_key) {
+        guard self._upgrade and type(base64_sec_key) == "string" else {
+            return
+        }
+        http_resp = "HTTP/1.1 101 Web Socket Protocol Handshake" .. "\r\n"
+        if self._zstream ~= nil {
+            http_resp ..= "Sec-Websocket-Extensions: permessage-deflate; client_max_window_bits=15" .. "\r\n"
+        }
+        http_resp ..= "Sec-Websocket-Accept: \(base64_sec_key)" .. "\r\n" ..
+            "Upgrade: websocket" .. "\r\n" ..
+            "Connection: Upgrade" .. "\r\n"
+        return http_resp
+    }
+
+    --- process data input, will inflate websocket data
+    ---@param data string
+    ---@return number nread and _tbl for headers and frames including HTTP_BODY or websocket frames
+    fn process(data) {
+        guard (type(data) == "string") and
+            (data:len() > 0) and
+            (self._lib ~= nil) else
+        {
+            return -1, "[HSSN] Invalid params"
+        }
+        _lib = self._lib
+        --
+        nread, ret = 0, 0
+        data = self._data .. data
+        repeat {
+            ret = tonumber(mlib.mssn_process(_lib, data, data:len()))
+            if ret > 0 {
+                nread = nread + ret
+                data = (data:len() > ret) and data:sub(ret + 1) or ""
+            }
+        } until (ret <= 0) or (data:len() <= 0)
+        self._data = data
+        -- get method, path, status, headers
+        _tbl = self._tbl
+        if _lib.state >= self.STATE_HEADER and _tbl.headers == nil {
+            if _lib.method == nil and _lib.path == nil {
+                _tbl.method = nil
+                _tbl.path = nil
+                _tbl.status = tonumber(_lib.status)
+            } else {
+                _tbl.method = ffi_str(_lib.method)
+                _tbl.path = ffi_str(_lib.path)
+                _tbl.status = 0
+            }
+            _tbl.upgrade = tonumber(_lib.upgrade)
+            -- headers
+            if _lib.headers ~= nil {
+                _tbl.headers = {}
+                hnode = _lib.headers
+                repeat {
+                    hnext = hnode.next
+                    _tbl.headers[ffi_str(hnode.key)] = ffi_str(hnode.value)
+                    hnode = hnext
+                } until hnode == nil
+            } else {
+                _tbl.headers = nil
+            }
+        }
+        -- init websocket
+        if not self._upgrade and _tbl.upgrade {
+            self._upgrade = true
+            self:_initWebSocket(_tbl)
+        }
+        -- get body (frames)
+        if _lib.state >= self.STATE_BODY and _lib.frames ~= nil {
+            fr_tbl = {}
+            fnode = _lib.frames
+            repeat {
+                f = { ftype = self:_ftypeNumberToString(fnode.ftype), data = "" }
+                dnode = fnode.data
+                repeat {
+                    f.data = f.data .. ffi_str(dnode.data, dnode.length)
+                    dnode = dnode.next
+                } until dnode == nil
+                if self._zstream ~= nil and f.data:len() > 0 {
+                    zret, zdata = self._zstream:inflate(f.data)
+                    if zret {
+                        f.data = zdata
+                    } else {
+                        -- frame data nil means inflate error
+                        f.data = nil
+                    }
+                }
+                tbl_insert(fr_tbl, f)
+                fnode = fnode.next
+            } until fnode == nil
+            _tbl.frames = fr_tbl
+        } else {
+            _tbl.frames = nil
+        }
+        if _lib.frames ~= nil {
+            mlib.mssn_reclaim(self._lib, nil)
+        }
+        self._state = _lib.state
+        return nread, _tbl
+    }
+
+    --- sec websocket key before base64 encoding
+    fn secWebSocketKeyRaw() {
+        return self._sec_key_raw
+    }
+
+    -- to string lower value
+    fn _lowerValue(htbl, key) {
+        value = htbl.headers[key]
+        if type(value) == "string" {
+            return value:lower()
+        }
+        return ""
+    }
+
+    fn _initWebSocket(htbl) {
+        guard self:_lowerValue(htbl, "Connection") == "upgrade" and
+              self:_lowerValue(htbl, "Upgrade") == "websocket" else {
+            return
+        }
+        if self._sec_key_raw:len() <= 0 {
+            skey = htbl.headers['Sec-WebSocket-Key']
+            if type(skey) == "string" {
+                self._sec_key_raw = self:sha1(skey .. "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+            }
+        }
+        if self._zstream == nil {
+            encoding = self:_lowerValue(htbl, "Accept-Encoding")
+            if encoding:find("deflate") ~= nil or encoding:find("gzip") ~= nil {
+                self._zstream = ZlibStream()
+            }
+        }
+    }
+
+    --- generate frame type string
+    ---@param ftype number
+    fn _ftypeNumberToString(ftype) {
+        switch ftype {
+        case 1: return "BODY"
+        case 2: return "PING"
+        case 3: return "PONG"
+        case 4: return "CLOSE"
+        case 5: return "TEXT"
+        case 6: return "BINARY"
+        default: return nil
+        }
+    }
+
+    fn _ftypeStringToNumber(ftypeString) {
+        switch ftypeString {
+        case "BODY": return 1
+        case "PING": return 2
+        case "PONG": return 3
+        case "CLOSE": return 4
+        case "TEXT": return 5
+        case "BINARY": return 6
+        default: return nil
+        }
+    }
+
+    --- build websocket frame data, will deflate websocket data
+    ---@param ftype string "PING", "PONG", "CLOSE", "TEXT", "BINARY"
+    ---@param fsize number max frame size
+    ---@param data string data to build
+    ---@param rsv_bits number rsv 3 bits
+    fn build(ftype, fsize, data, rsv_bits) {
+        guard self._lib ~= nil and
+            type(ftype) == "string" and
+            type(fsize) == "number" and
+            type(data) == "string" and
+            fsize > 0 else
+        {
+            return false, "[HSSN] Invalid params"
+        }
+        rsv_bits = rsv_bits or 0
+        --
+        ftype = self:_ftypeStringToNumber(ftype)
+        guard ftype else {
+            return false, "[HSSN] Invalid frame type"
+        }
+        -- if using permessage-deflate
+        if self._zstream ~= nil and data:len() > 0 {
+            zret, zdata = self._zstream:deflate(data)
+            if zret {
+                data = zdata
+                rsv_bits += 4 -- for rsv1 = 1
+            }
+        }
+        --
+        head = mlib.mssn_build(self._lib, ftype, rsv_bits, fsize, data, data:len())
+        guard head ~= nil else {
+            return false, ffi_str(self._lib.error_msg)
+        }
+        ftbl = {}
+        it = head
+        repeat {
+            nit = it.next
+            tbl_insert(ftbl, ffi_str(it.data, it.length))
+            it = nit
+        } until it == nil
+        mlib.mssn_reclaim(self._lib, head)
+        return true, ftbl
+    }
+
+    --- reclaim process result if needed
+    fn reclaim(force) {
+        if force or self._tbl.upgrade == 0 {
+            self._tbl.status = 0
+            self._tbl.method = nil
+            self._tbl.path = nil
+            self._tbl.headers = nil
+        }
+        self._tbl.frames = nil
+        self._data = ""
+    }
+
+    --- SHA1 digest
+    ---@param data string
+    fn sha1(data) {
+        mlib.mssn_sha1(data, data:len(), sha1_buf)
+        return ffi_str(sha1_buf, 20)
+    }
+}
+
+return Http1Session

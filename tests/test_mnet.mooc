@@ -1,0 +1,136 @@
+--
+-- install mnet from luarock first
+
+local input_ip = ""
+local ret, MNet = pcall(require, "ffi-mnet")
+if not ret {
+    print("Please install mnet from luarock first")
+    os.exit(0)
+} else {
+    print("you can input ip in argument")
+    input_ip = ... or "127.0.0.1"
+}
+
+import HSSN from "ffi-http1-session"
+import Base64 from "mime_base64"
+
+MNet.init()
+
+-- s1 = "dGhlIHNhbXBsZSBub25jZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+-- skey = hssnLib:sha1(s1)
+-- b64 = Base64.base64_encode(skey)
+-- print("skey", skey, b64)
+
+fn _hexDump(data) {
+    guard type(data) == "string" else {
+        return
+    }
+    i = 1
+    repeat {
+        io.write(string.format("0x%02x ", data:byte(i, i)))
+        if (i > 1) and (i % 16 == 0) {
+            io.write("\n")
+        }
+        i += 1
+    } until i >= data:len()
+    if (i > 1) and (i % 16 == 0) {
+    } else {
+        io.write("\n")
+    }
+}
+
+fn _closing_chann(chann, hssnLib) {
+    print("closing chann...")
+    hssnLib._sec_accept = false
+    hssnLib:closeSession()
+    chann:close()
+}
+
+listen_chann = MNet.openChann("tcp")
+listen_chann:setCallback({ chann, event_name, accept_chann, c_msg in
+    print("cb \(event_name)")
+    guard event_name == "event_accept" else {
+        return
+    }
+    hssnLib = HSSN(true)
+    -- PING every 2 seconds
+    accept_chann:activeEvent("event_timer", 2000)
+    accept_chann:setCallback({ chann, event_name, _, _ in
+        if event_name == "event_disconnect" {
+            _closing_chann(chann, hssnLib)
+        }
+        if event_name == "event_timer" {
+            ret, ftbl = hssnLib:build("PING", 128, "")
+            print("timer event \(ret) \(ftbl)")
+            if ret {
+                chann:send(ftbl[1])
+            }
+        }
+
+        guard event_name == "event_recv" else {
+            return
+        }
+        data = chann:recv()
+        guard type(data) == "string" else {
+            return
+        }
+
+        print("---")
+        print("- before process count: ", data:len())
+        nread, htbl = hssnLib:process(data)
+        print("- after process nread: ", nread)
+        guard nread > 0 and
+            htbl.method == "GET" and
+            htbl.path == "/mnet_ws" and htbl.upgrade == 1 else {
+            return
+        }
+
+        if hssnLib:isUpgrade() and not hssnLib._sec_accept {
+            print("http-request: ", data)
+            b64_raw = hssnLib:secWebSocketKeyRaw()
+            b64_enc = Base64.base64_encode(b64_raw)
+            print("base64_sec: ", b64_enc)
+            --
+            http_resp = hssnLib:basicSecAcceptHeader(b64_enc) ..
+                            "Server: WebSocket-MNet" .. "\r\n\r\n"
+            print("http response --\n", http_resp)
+            chann:send(http_resp)
+            hssnLib._sec_accept = true
+        } elseif htbl.frames {
+            for i, fr in ipairs(htbl.frames) {
+                print("recv \(i)_ftype - ", fr.ftype)
+                print("recv \(i)_fdata - \(fr.data and fr.data:len() or '0')")
+                if fr.ftype == "CLOSE" {
+                    _closing_chann(chann, hssnLib)
+                    return
+                } elseif fr.ftype == "PONG" {
+                    -- pong frarme
+                } else {
+                    ret, out_tbl = hssnLib:build(fr.ftype, fr.data:len() + 16, fr.data)
+                    if ret {
+                        print("build ret \(ret) with \(#out_tbl) packets for sending")
+                        --_hexDump(out_tbl[1])
+                        for _, v in ipairs(out_tbl) {
+                            chann:send(v)
+                        }
+                    } else {
+                        print("\(i)_bulid error: \(out_tbl)")
+                    }
+                }
+            }
+        } -- chann.upgrade
+    })
+})
+
+listen_chann:listen("\(input_ip)", 9010)
+print("listen \(input_ip):9010")
+
+nseconds = 0
+repeat {
+    ncount = MNet.poll(1000)
+    nseconds += 1
+    io.write("\rseconds \(tostring(nseconds)), sockets \(tostring(ncount)): ")
+    io.flush()
+} until nseconds > 150
+
+MNet.fini()

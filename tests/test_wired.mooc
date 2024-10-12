@@ -1,0 +1,53 @@
+
+import FFI from "ffi"
+import HSSN from "ffi-http1-session"
+
+fn processData(hnLib, data) {
+    nread, htbl = hnLib:process(data)
+    print("[\(hnLib)] - process nread: \(nread), upgrade: \(htbl.upgrade)")
+
+    guard nread > 0 and htbl.upgrade else {
+        return
+    }
+
+    out_data = ""
+    for _, f in ipairs(htbl.frames) {
+        out_data ..= f.data
+    }
+    print("[\(hnLib)] - data: '\(out_data)'")
+
+    hnLib:reclaim()
+}
+
+do {
+    hssnClient = HSSN(false, true)
+    hssnServer = HSSN(true)
+
+cnt_req =
+[[GET /ws HTTP/1.1
+Connection: Upgrade
+Pragma: no-cache
+Cache-Control: no-cache
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0
+Upgrade: websocket
+Origin: null
+Sec-WebSocket-Version: 13
+Accept-Encoding: gzip, deflate
+Accept-Language: zh-CN,zh;q=0.9,en;q=0.8
+Sec-WebSocket-Key: Y4qxGM2w/Xzzt/mDguFv2g==
+Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+
+]]
+    success, tbl = hssnClient:build("TEXT", 64, "hello, world~", 0x4)
+    if success {
+        print("[\(hssnClient)] - client build result:", tbl[1]:len())
+        print("[\(hssnServer)] - server start process")
+        hssnServer:process(cnt_req)
+        c1 = processData(hssnServer, tbl[1])
+    } else {
+        print(tbl)
+    }
+
+    hssnClient:closeSession()
+    hssnServer:closeSession()
+}
