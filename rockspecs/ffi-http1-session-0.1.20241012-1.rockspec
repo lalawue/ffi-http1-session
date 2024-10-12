@@ -1,5 +1,5 @@
 package = "ffi-http1-session"
-version = "0.1.20241012"
+version = "0.1.20241012-1"
 source = {
    url = "git+https://github.com/lalawue/ffi-http1-session.git",
    tag = "0.1.20241012"
