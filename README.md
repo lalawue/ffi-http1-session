@@ -8,6 +8,8 @@ It runs on *BSD and Linux. Windows was not tested.
 
 support LuaJIT's pull-style api, require luarocks to make.
 
+source code are written in [moocscript](https://github.com/lalawue/mooncake), then `./compile.sh` to generate Lua source.
+
 ## Install or Compilation
 
 ```sh
@@ -34,9 +36,12 @@ $ ./tests/test.sh tests/test_wired.mooc
 $ ./tests/test.sh tests/test_mnet.mooc
 ```
 
-## Origin
+## Reference 
 
-from https://github.com/lalawue/ffi-hyperparser
+- https://github.com/armatys/hyperparser
+- https://github.com/tatsuhiro-t/wslay
+- https://github.com/mortzdk/Websocket
+
 
 ## Used in
 
